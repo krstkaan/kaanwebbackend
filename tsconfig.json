@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+      "target": "ES2020",
+      "module": "CommonJS",
+      "rootDir": ".",                   // Proje kökünden başlat
+      "outDir": "dist",                 // Derlenmiş dosyalar buraya gidecek
+      "strict": true,
+      "esModuleInterop": true,
+      "moduleResolution": "node",
+      "forceConsistentCasingInFileNames": true,
+      "skipLibCheck": true,
+      "resolveJsonModule": true
+    },
+    "include": ["controllers", "models", "routes", "utils", "app.ts"],
+    "exclude": ["node_modules", "dist"]
+  }
+  
