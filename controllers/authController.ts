@@ -1,59 +1,80 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
-import { supabase } from '../utils/supabase';
 import { generateToken } from '../utils/jwt';
+import { getUserByUsername, createUser } from '../models/authModel';
+import { ApiResponse } from '../utils/response';
 
-export const register = async (req: Request, res: Response): Promise<any> => {
+export const register = async (req: Request, res: Response): Promise<void> => {
     try {
         const { username, password } = req.body;
 
-        if (!username || !password)
-            return res.status(400).json({ error: 'Kullanıcı adı ve şifre gereklidir.' });
+        if (!username || !password) {
+            ApiResponse.error({
+                res,
+                statusCode: 400,
+                message: 'Kullanıcı adı ve şifre gereklidir.',
+            });
+            return;
+        }
 
-        const { data: existing } = await supabase
-            .from('users')
-            .select('*')
-            .eq('username', username)
-            .single();
-
-        if (existing)
-            return res.status(409).json({ error: 'Bu kullanıcı adı zaten alınmış.' });
+        const { data: existing } = await getUserByUsername(username);
+        if (existing) {
+            ApiResponse.error({
+                res,
+                statusCode: 409,
+                message: 'Bu kullanıcı adı zaten alınmış.',
+            });
+            return;
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        const { data, error } = await createUser(username, hashedPassword);
 
-        const { data, error } = await supabase.from('users').insert([
-            { username, password: hashedPassword, yetki: 'user' }
-        ]);
+        if (error) {
+            ApiResponse.error({
+                res,
+                statusCode: 500,
+                message: error.message,
+            });
+            return;
+        }
 
-        if (error) return res.status(500).json({ error: error.message });
-
-        res.status(201).json({ message: 'Kayıt başarılı', user: data?.[0] });
-
-    } catch (err) {
-        res.status(500).json({ error: 'Sunucu hatası' });
+        ApiResponse.success({
+            res,
+            statusCode: 201,
+            message: 'Kayıt başarılı',
+            data: data?.[0],
+        });
+    } catch {
+        ApiResponse.error({
+            res,
+            statusCode: 500,
+            message: 'Sunucu hatası',
+        });
     }
 };
 
-
-// POST /api/auth/login
-export const login = async (req: Request, res: Response): Promise<any>  => {
+export const login = async (req: Request, res: Response): Promise<void> => {
     const { username, password } = req.body;
 
-    const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .single();
-
-    if (error || !user)
-        return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    const { data: user, error } = await getUserByUsername(username);
+    if (error || !user) {
+        ApiResponse.error({ res, statusCode: 401, message: 'Kullanıcı adı veya şifre hatalı' });
+        return;
+    }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
-
-    if (!passwordMatch)
-        return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    if (!passwordMatch) {
+        ApiResponse.error({ res, statusCode: 401, message: 'Kullanıcı adı veya şifre hatalı' });
+        return;
+    }
 
     const token = generateToken(user.id);
-
-    return res.json({ token, user: { id: user.id, username: user.username, yetki: user.yetki } });
+    ApiResponse.success({
+        res,
+        data: {
+            token,
+            user: { id: user.id, username: user.username, yetki: user.yetki },
+        },
+    });
 };
